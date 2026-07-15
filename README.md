@@ -257,3 +257,69 @@ If a port is already in use, stop the conflicting application or update the port
 ### Cloud Deployment
 
 For a future cloud deployment, the frontend and backend containers can be deployed to **Google Cloud Run**, images can be stored in **Google Artifact Registry**, and MongoDB can be hosted using MongoDB Atlas in a GCP region.
+
+## Docker Network and Volume
+
+### Docker Network
+
+The frontend, backend, and MongoDB containers communicate through a custom bridge network:
+
+```text
+ecommerce_network
+```
+
+Connected containers:
+
+```text
+ecommerce-frontend
+ecommerce-backend
+ecommerce-mongo
+```
+
+The backend connects to MongoDB using the Docker service name:
+
+```text
+mongodb://mongo:27017/ecommerce
+```
+
+### Docker Volume
+
+MongoDB data is stored in a named Docker volume:
+
+```text
+ecommerce_mongo_data
+```
+
+This keeps database data available when containers are stopped or recreated.
+
+To stop containers without deleting data:
+
+```bash
+docker compose down
+```
+
+To remove containers and permanently delete database data:
+
+```bash
+docker compose down -v
+```
+
+### Verification Commands
+
+Check the network:
+
+```bash
+docker network inspect ecommerce_network
+```
+
+Check the volume:
+
+```bash
+docker volume inspect ecommerce_mongo_data
+```
+
+Check running containers:
+
+```bash
+docker compose ps
+```
