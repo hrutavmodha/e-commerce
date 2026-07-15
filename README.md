@@ -111,3 +111,149 @@ This project is licensed under the [MIT License](./LICENSE).
 ## 🤝 Contributions
 
 Feel free to fork, submit PRs, or open an issue. Let's build something cool together!
+
+---
+
+## Docker Setup
+
+The application is containerized using Docker Compose and consists of three services:
+
+- **Frontend:** React application running on port `3000`
+- **Backend:** Node.js and Express API running on port `5000`
+- **Database:** MongoDB running on port `27017`
+
+### Architecture
+
+    Browser
+       |
+       v
+    React Frontend
+       |
+       v
+    Node.js Backend
+       |
+       v
+    MongoDB
+
+### Prerequisites
+
+Install and start:
+
+- Docker Desktop
+- Docker Compose
+
+No local installation of Node.js, npm, or MongoDB is required.
+
+### Environment Variables
+
+Create a local environment file from the provided example:
+
+```bash
+cp .env.example .env
+```
+
+The `.env` file contains local secrets and is ignored by Git.
+
+Example:
+
+```env
+JWT_SECRET=change-this-secret
+```
+
+### Build and Start
+
+From the project root, run:
+
+```bash
+docker compose up --build -d
+```
+
+This command:
+
+1. Pulls the MongoDB image.
+2. Builds the backend image.
+3. Builds the frontend image.
+4. Creates a shared Docker network.
+5. Starts all services in the background.
+
+### Access the Application
+
+- Frontend: http://localhost:3000
+- Backend products API: http://localhost:5000/products
+- MongoDB: `localhost:27017`
+
+An empty response from the products endpoint:
+
+```json
+[]
+```
+
+means that the backend and MongoDB are connected successfully, but the database does not contain products yet.
+
+### Check Container Status
+
+```bash
+docker compose ps
+```
+
+Expected services:
+
+```text
+ecommerce-frontend
+ecommerce-backend
+ecommerce-mongo
+```
+
+MongoDB should appear as healthy.
+
+### View Logs
+
+View logs for all services:
+
+```bash
+docker compose logs -f
+```
+
+View logs for one service:
+
+```bash
+docker compose logs -f backend
+docker compose logs -f frontend
+docker compose logs -f mongo
+```
+
+### Stop the Application
+
+```bash
+docker compose down
+```
+
+### Stop and Remove Database Data
+
+```bash
+docker compose down -v
+```
+
+> Warning: The `-v` option removes the MongoDB volume and deletes the locally stored database data.
+
+### Rebuild After Code Changes
+
+```bash
+docker compose up --build -d
+```
+
+### Troubleshooting
+
+If Docker is not running, open Docker Desktop and wait until the Docker Engine starts.
+
+If a container fails, inspect its logs:
+
+```bash
+docker compose logs --tail=100
+```
+
+If a port is already in use, stop the conflicting application or update the port mapping in `docker-compose.yml`.
+
+### Cloud Deployment
+
+For a future cloud deployment, the frontend and backend containers can be deployed to **Google Cloud Run**, images can be stored in **Google Artifact Registry**, and MongoDB can be hosted using MongoDB Atlas in a GCP region.
