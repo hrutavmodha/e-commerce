@@ -23,11 +23,13 @@ It supports role-based access control, image uploads, and dynamic product manage
 
 ## 🛠️ Tech Stack
 
-| Area      | Technology           |
-|------------|----------------------|
-| Frontend   | React.js             |
-| Backend    | Node.js, Express.js  |
-| Database   | MongoDB              |
+| Area | Technology |
+|------|------------|
+| Frontend | React.js, Nginx |
+| Backend | Node.js, Express.js |
+| Database | MongoDB |
+| Containerization | Docker, Docker Compose |
+| Registries | Docker Hub, GitHub Container Registry, GCP Artifact Registry |
 
 ## Package Manager Support
 
@@ -39,14 +41,14 @@ This project supports multiple package managers:
 ## 💻 Getting Started
 
 **1. Clone the repository** 
-   ```Bash
+   ```bash
    git clone "https://github.com/rutu-modha/e-commerce.git"
 cd ./e-commerce
 ```
 
 **2. Install dependencies**
 - **using npm**
-```Bash
+```bash
 npm install
 cd frontend
 npm install
@@ -56,7 +58,7 @@ npm install
 ```
 *OR*
 - **using yarn**
-```Bash
+```bash
 yarn install
 cd frontend
 yarn install
@@ -66,7 +68,7 @@ yarn install
 ```
 *OR*
 - **using pnpm**
-```Bash
+```bash
 pnpm install
 cd frontend
 pnpm install
@@ -77,20 +79,224 @@ pnpm install
 **3. Setup a `.env` at root file with your own Mongo_URI and JWT_SECRET variables**
 
 **4. Run both servers**
-```Bash
+```bash
 cd ..
 npm run start
 ```
 *OR*
-```Bash
+```bash
 cd ..
 yarn run start
 ```
 *OR*
-```Bash
+```bash
 cd ..
 pnpm run start
 ```
+## 🐳 Docker Setup
+
+The application is containerized as three services:
+
+- **Frontend:** React production build served by unprivileged Nginx
+- **Backend:** Node.js and Express API
+- **Database:** MongoDB with persistent storage
+
+### Container Architecture
+
+```text
+Browser
+  |
+  v
+Frontend container (localhost:3000 -> 8080)
+  |
+  v
+Backend container (localhost:5000)
+  |
+  v
+MongoDB container (localhost:27017)
+```
+
+### Security and Optimization
+
+- Multi-stage Dockerfiles reduce the final image size.
+- The backend runs as the non-root `node` user.
+- The frontend runs as the non-root `nginx` user.
+- Only production frontend files are copied to the runtime image.
+- Local secrets are stored in `.env` and excluded from Git.
+
+### Docker Network and Volume
+
+All services communicate through the custom bridge network:
+
+```text
+ecommerce_network
+```
+
+MongoDB data is stored in the named volume:
+
+```text
+ecommerce_mongo_data
+```
+
+This keeps database data available when containers are stopped or recreated.
+
+### Environment Variables
+
+Create a local environment file:
+
+```bash
+cp .env.example .env
+```
+
+Example:
+
+```env
+JWT_SECRET=change-this-to-a-long-random-secret
+```
+
+Do not commit the real `.env` file.
+
+### Build and Start
+
+```bash
+docker compose up --build -d
+```
+
+### Application URLs
+
+- Frontend: <http://localhost:3000>
+- Frontend health check: <http://localhost:3000/health>
+- Backend products API: <http://localhost:5000/products>
+- MongoDB: `localhost:27017`
+
+An empty products response (`[]`) means the backend is connected successfully, but the database has no products yet.
+
+### Verification
+
+Check the containers:
+
+```bash
+docker compose ps
+```
+
+Verify rootless execution:
+
+```bash
+docker exec ecommerce-backend id
+docker exec ecommerce-frontend id
+```
+
+Expected users:
+
+```text
+backend:  uid=1000(node)
+frontend: uid=101(nginx)
+```
+
+Verify the custom network and volume:
+
+```bash
+docker network inspect ecommerce_network
+docker volume inspect ecommerce_mongo_data
+```
+
+View logs:
+
+```bash
+docker compose logs -f
+```
+
+Stop the containers without deleting database data:
+
+```bash
+docker compose down
+```
+
+Delete the containers and MongoDB volume:
+
+```bash
+docker compose down -v
+```
+
+> Warning: `docker compose down -v` permanently deletes the local MongoDB data.
+
+## 📦 Published Container Images
+
+### Docker Hub
+
+```text
+abdelazez66/ecommerce-frontend:v1
+abdelazez66/ecommerce-backend:v1
+```
+
+### GitHub Container Registry
+
+```text
+ghcr.io/abdelazezmohamedazez/ecommerce-frontend:v1
+ghcr.io/abdelazezmohamedazez/ecommerce-backend:v1
+```
+
+The images were also validated using Google Cloud Artifact Registry. The temporary GCP resources were deleted after verification to avoid unnecessary costs.
+
+## 🧪 Evidence
+
+Place the task screenshots in `docs/images/` using these names:
+
+```text
+docs/images/containers-running.png
+docs/images/frontend-running.png
+docs/images/backend-running.png
+docs/images/rootless-containers.png
+docs/images/docker-hub-images.png
+docs/images/ghcr-images.png
+docs/images/gcp-artifact-registry.png
+```
+
+### Containers Running
+
+![Docker Compose services](docs/images/containers-running.png)
+
+### Frontend Running
+
+![Frontend application](docs/images/frontend-running.png)
+
+### Backend Running
+
+![Backend products endpoint](docs/images/backend-running.png)
+
+### Rootless Containers
+
+![Rootless backend and frontend](docs/images/rootless-containers.png)
+
+### Docker Hub Images
+
+![Docker Hub images](docs/images/container-registries.png)
+
+
+### GCP Artifact Registry
+
+![GCP Artifact Registry images](docs/images/gcp-artifact-registry.png)
+
+## 🛠️ Docker Troubleshooting
+
+Check service logs when a container fails:
+
+```bash
+docker compose logs --tail=100 SERVICE_NAME
+```
+
+Examples:
+
+```bash
+docker compose logs --tail=100 frontend
+docker compose logs --tail=100 backend
+docker compose logs --tail=100 mongo
+```
+
+If Docker cannot connect to the daemon, open Docker Desktop and wait until the Docker Engine is running.
+
+If a port is already in use, stop the conflicting application or change the host-side port in `docker-compose.yml`.
+
 ## ✅ Upcoming Features
 
 - OAuth with Google
@@ -111,149 +317,3 @@ This project is licensed under the [MIT License](./LICENSE).
 ## 🤝 Contributions
 
 Feel free to fork, submit PRs, or open an issue. Let's build something cool together!
-
----
-
-## Docker Setup
-
-The application is containerized using Docker Compose and consists of three services:
-
-- **Frontend:** React application running on port `3000`
-- **Backend:** Node.js and Express API running on port `5000`
-- **Database:** MongoDB running on port `27017`
-
-### Architecture
-
-    Browser
-       |
-       v
-    React Frontend
-       |
-       v
-    Node.js Backend
-       |
-       v
-    MongoDB
-
-### Prerequisites
-
-Install and start:
-
-- Docker Desktop
-- Docker Compose
-
-No local installation of Node.js, npm, or MongoDB is required.
-
-### Environment Variables
-
-Create a local environment file from the provided example:
-
-```bash
-cp .env.example .env
-```
-
-The `.env` file contains local secrets and is ignored by Git.
-
-Example:
-
-```env
-JWT_SECRET=change-this-secret
-```
-
-### Build and Start
-
-From the project root, run:
-
-```bash
-docker compose up --build -d
-```
-
-This command:
-
-1. Pulls the MongoDB image.
-2. Builds the backend image.
-3. Builds the frontend image.
-4. Creates a shared Docker network.
-5. Starts all services in the background.
-
-### Access the Application
-
-- Frontend: http://localhost:3000
-- Backend products API: http://localhost:5000/products
-- MongoDB: `localhost:27017`
-
-An empty response from the products endpoint:
-
-```json
-[]
-```
-
-means that the backend and MongoDB are connected successfully, but the database does not contain products yet.
-
-### Check Container Status
-
-```bash
-docker compose ps
-```
-
-Expected services:
-
-```text
-ecommerce-frontend
-ecommerce-backend
-ecommerce-mongo
-```
-
-MongoDB should appear as healthy.
-
-### View Logs
-
-View logs for all services:
-
-```bash
-docker compose logs -f
-```
-
-View logs for one service:
-
-```bash
-docker compose logs -f backend
-docker compose logs -f frontend
-docker compose logs -f mongo
-```
-
-### Stop the Application
-
-```bash
-docker compose down
-```
-
-### Stop and Remove Database Data
-
-```bash
-docker compose down -v
-```
-
-> Warning: The `-v` option removes the MongoDB volume and deletes the locally stored database data.
-
-### Rebuild After Code Changes
-
-```bash
-docker compose up --build -d
-```
-
-### Troubleshooting
-
-If Docker is not running, open Docker Desktop and wait until the Docker Engine starts.
-
-If a container fails, inspect its logs:
-
-```bash
-docker compose logs --tail=100
-```
-
-If a port is already in use, stop the conflicting application or update the port mapping in `docker-compose.yml`.
-
-### Cloud Deployment
-
-For a future cloud deployment, the frontend and backend containers can be deployed to **Google Cloud Run**, images can be stored in **Google Artifact Registry**, and MongoDB can be hosted using MongoDB Atlas in a GCP region.
