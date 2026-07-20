@@ -6,6 +6,7 @@ const cookieParser = require("cookie-parser")
 const morgan = require("morgan")
 const helmet = require("helmet") 
 const xss = require("xss-clean")
+const mongoose = require("mongoose")
 const { body, validationResult } = require("express-validator")
 const sanitize = require("express-mongo-sanitize")
 const compress = require("compression")
@@ -117,6 +118,19 @@ app.post("/reviews", verifyToken, async (req, res) => {
 })
 app.get("/reviews", async (req, res) => {
     await showReview(req, res)
+})
+app.get("/health", (req, res) => {
+    if (mongoose.connection.readyState === 1) {
+        return res.status(200).json({
+            status: "ok",
+            database: "connected"
+        })
+    }
+
+    return res.status(503).json({
+        status: "unavailable",
+        database: "disconnected"
+    })
 })
 app.get("/:id", async (req, res) => {
     await showProduct(req, res)

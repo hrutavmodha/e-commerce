@@ -93,7 +93,7 @@ yarn run start
 cd ..
 pnpm run start
 ```
-## 🐳 Docker Setup
+## 🐳 Task 6: Docker Compose Orchestration
 
 The application is containerized as three services:
 
@@ -101,19 +101,21 @@ The application is containerized as three services:
 - **Backend:** Node.js and Express API
 - **Database:** MongoDB with persistent storage
 
+Compose starts MongoDB first, waits for its health check, then starts the backend and waits for the backend `/health` check before starting the frontend. Every service uses `restart: unless-stopped`, the `json-file` logging driver with rotation, and the `ecommerce_network` bridge network.
+
 ### Container Architecture
 
 ```text
 Browser
   |
   v
-Frontend container (localhost:3000 -> 8080)
+Frontend container (localhost:${FRONTEND_PORT:-3000} -> 8080)
   |
   v
-Backend container (localhost:5000)
+Backend container (localhost:${BACKEND_PORT:-5000} -> 5000)
   |
   v
-MongoDB container (localhost:27017)
+MongoDB container (localhost:${MONGO_PORT:-27017} -> 27017)
 ```
 
 ### Security and Optimization
@@ -138,7 +140,7 @@ MongoDB data is stored in the named volume:
 ecommerce_mongo_data
 ```
 
-This keeps database data available when containers are stopped or recreated.
+This keeps database data available when containers are stopped or recreated. `docker compose down` removes containers and the Compose network but preserves named volumes. Only the `-v` option removes the MongoDB volume.
 
 ### Environment Variables
 
@@ -148,28 +150,53 @@ Create a local environment file:
 cp .env.example .env
 ```
 
-Example:
+The sample includes the default ports, database, frontend origin, and application image tags. Generate a secret locally:
 
-```env
-JWT_SECRET=change-this-to-a-long-random-secret
+```bash
+openssl rand -hex 32
 ```
 
-Do not commit the real `.env` file.
+Copy the generated value into `JWT_SECRET` in `.env`, replacing the placeholder. Compose intentionally has no default JWT secret and will refuse to resolve the configuration if it is missing. Do not commit the real `.env` file; it is ignored by Git.
 
-### Build and Start
+The defaults can be changed in `.env`:
+
+```env
+COMPOSE_PROJECT_NAME=ecommerce
+FRONTEND_PORT=3000
+BACKEND_PORT=5000
+MONGO_PORT=27017
+MONGO_DATABASE=ecommerce
+FRONTEND_URL=http://localhost:3000
+FRONTEND_IMAGE=abdelazez66/ecommerce-frontend:v1
+BACKEND_IMAGE=abdelazez66/ecommerce-backend:v1
+```
+
+### Pull, Build, and Start
+
+Pull the published images and start the stack:
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+To build the application images from the local Dockerfiles instead:
 
 ```bash
 docker compose up --build -d
 ```
 
+Both application services retain `build` configuration while also using the configurable `FRONTEND_IMAGE` and `BACKEND_IMAGE` tags.
+
 ### Application URLs
 
 - Frontend: <http://localhost:3000>
 - Frontend health check: <http://localhost:3000/health>
+- Backend health check: <http://localhost:5000/health>
 - Backend products API: <http://localhost:5000/products>
 - MongoDB: `localhost:27017`
 
-An empty products response (`[]`) means the backend is connected successfully, but the database has no products yet.
+These URLs use the default ports from `.env.example`. An empty products response (`[]`) means the backend is connected successfully, but the database has no products yet.
 
 ### Verification
 
@@ -177,6 +204,12 @@ Check the containers:
 
 ```bash
 docker compose ps
+```
+
+Run the complete Compose verification, which checks configuration, container and health state, HTTP endpoints, service-name networking, and the named network and volume:
+
+```bash
+./scripts/verify-compose.sh
 ```
 
 Verify rootless execution:
@@ -200,10 +233,41 @@ docker network inspect ecommerce_network
 docker volume inspect ecommerce_mongo_data
 ```
 
+Verify frontend-to-backend communication through the Compose service name:
+
+```bash
+docker compose exec -T frontend wget -qO- http://backend:5000/health
+```
+
+Verify backend-to-MongoDB communication through the `mongo` service name and the configured `MONGO_URI`:
+
+```bash
+docker compose exec -T backend node -e 'const mongoose = require("mongoose"); mongoose.connect(process.env.MONGO_URI).then(async () => { await mongoose.connection.db.admin().ping(); console.log("backend -> mongo: ok"); await mongoose.disconnect(); }).catch((error) => { console.error(error.message); process.exit(1); });'
+```
+
 View logs:
 
 ```bash
 docker compose logs -f
+```
+
+Restart the services without recreating them:
+
+```bash
+docker compose restart
+```
+
+### MongoDB Persistence
+
+The following creates a small marker document in the default database, removes the containers, starts them again, and confirms the document remains in `ecommerce_mongo_data`:
+
+```bash
+docker compose exec -T mongo mongosh --quiet ecommerce --eval \
+  'db.composePersistence.updateOne({_id: "task-6"}, {$set: {value: "persists"}}, {upsert: true})'
+docker compose down
+docker compose up -d
+docker compose exec -T mongo mongosh --quiet ecommerce --eval \
+  'db.composePersistence.findOne({_id: "task-6"})'
 ```
 
 Stop the containers without deleting database data:
@@ -212,13 +276,13 @@ Stop the containers without deleting database data:
 docker compose down
 ```
 
-Delete the containers and MongoDB volume:
+`docker compose down` preserves named volumes, so subsequent `docker compose up -d` runs reuse the MongoDB data.
+
+> **DATA-LOSS WARNING:** The following command permanently deletes `ecommerce_mongo_data` and all MongoDB data stored in it. Use it only when you intentionally want to erase the database.
 
 ```bash
 docker compose down -v
 ```
-
-> Warning: `docker compose down -v` permanently deletes the local MongoDB data.
 
 ## 📦 Published Container Images
 

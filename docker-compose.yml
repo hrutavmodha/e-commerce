@@ -1,9 +1,17 @@
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   mongo:
     image: mongo:7
     container_name: ecommerce-mongo
     ports:
-      - "27017:27017"
+      - "${MONGO_PORT:-27017}:27017"
+    environment:
+      MONGO_INITDB_DATABASE: "${MONGO_DATABASE:-ecommerce}"
     volumes:
       - mongo_data:/data/db
     networks:
@@ -12,41 +20,58 @@ services:
       test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 10s
+    logging: *default-logging
     restart: unless-stopped
 
   backend:
+    image: "${BACKEND_IMAGE:-abdelazez66/ecommerce-backend:v1}"
     build:
       context: ./backend
     container_name: ecommerce-backend
     ports:
-      - "5000:5000"
+      - "${BACKEND_PORT:-5000}:5000"
     environment:
-      MONGO_URI: mongodb://mongo:27017/ecommerce
-      REACT_APP_FRONTEND_URL: http://localhost:3000
-      JWT_SECRET: ${JWT_SECRET}
+      MONGO_DATABASE: "${MONGO_DATABASE:-ecommerce}"
+      MONGO_URI: "mongodb://mongo:27017/${MONGO_DATABASE:-ecommerce}"
+      REACT_APP_FRONTEND_URL: "${FRONTEND_URL:-http://localhost:3000}"
+      JWT_SECRET: "${JWT_SECRET:?JWT_SECRET must be set in .env}"
     networks:
       - ecommerce_network
     depends_on:
       mongo:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:5000/health', (response) => { response.resume(); process.exit(response.statusCode === 200 ? 0 : 1) }).on('error', () => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    logging: *default-logging
     restart: unless-stopped
 
   frontend:
+    image: "${FRONTEND_IMAGE:-abdelazez66/ecommerce-frontend:v1}"
     build:
       context: ./frontend
+      args:
+        REACT_APP_BACKEND_URL: "http://localhost:${BACKEND_PORT:-5000}"
     container_name: ecommerce-frontend
     ports:
-      - "3000:8080"
-    environment:
-      REACT_APP_BACKEND_URL: http://localhost:5000
-      CHOKIDAR_USEPOLLING: "true"
+      - "${FRONTEND_PORT:-3000}:8080"
     networks:
       - ecommerce_network
     depends_on:
-      - backend
-    stdin_open: true
-    tty: true
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    logging: *default-logging
     restart: unless-stopped
 
 volumes:
